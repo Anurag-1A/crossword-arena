@@ -164,4 +164,35 @@ export function subscribeMessages(
   );
 }
 
+/** Apply the finished game's results to user's aggregate stats exactly once */
+export async function applyUserStatsOnce(opts: { gameId: string; userId: string }) {
+  const { gameId, userId } = opts;
+  const gameRef = doc(db, "games", gameId);
+  const userRef = doc(db, "users", userId);
+
+  await runTransaction(db, async (tx) => {
+    const g = await tx.get(gameRef);
+    if (!g.exists()) throw new Error("Game not found");
+    const gd: any = g.data();
+
+    if (gd.game_status !== "completed") return;
+    if (gd.stats_applied === true) return; // already counted
+
+    const playerWon   = gd.winner === "player";
+
+    // Create or update user's stats
+    tx.set(userRef, {
+      stats: {
+        games_played: increment(1),
+        wins: increment(playerWon ? 1 : 0),
+        losses: increment(playerWon ? 0 : 1),
+      },
+    }, { merge: true });
+
+    // Mark game so it doesn’t get double-counted
+    tx.update(gameRef, { stats_applied: true });
+  });
+}
+
+
 
