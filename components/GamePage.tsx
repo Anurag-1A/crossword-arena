@@ -15,9 +15,13 @@ import { useRouter } from "next/navigation";
 import { PUZZLES, getPuzzleById } from "@/data/puzzles";
 import { createGame, setGameTotals } from "@/lib/gameService";
 
+import { useUser } from "@clerk/nextjs";
+import { applyUserStatsOnce } from "@/lib/gameService";
+
+
 export default function GamePage({ gameId }: { gameId: string }) {
   const router = useRouter();
-
+  const { user } = useUser();
   // subscribe to game to know when it's completed + scores
   const [gameStatus, setGameStatus] = useState<"active" | "completed">("active");
   const [winner, setWinner] = useState<"player" | "ai" | null>(null);
@@ -42,6 +46,13 @@ export default function GamePage({ gameId }: { gameId: string }) {
     });
     return () => unsub();
   }, [gameId]);
+
+  useEffect(() => {
+  if (gameStatus === "completed" && user?.id) {
+    applyUserStatsOnce({ gameId, userId: user.id }).catch(() => {});
+    }
+  }, [gameStatus, user?.id, gameId]);
+
 
   // "Play Again" → start a fresh random game and route into it
   const handlePlayAgain = async () => {
